@@ -1,0 +1,68 @@
+# Kafka de un solo nodo en modo KRaft (sin Zookeeper).
+# Para desarrollo: los datos viven en un emptyDir y se pierden si el pod se recrea.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka
+  namespace: urban-sensors
+  labels:
+    app: kafka
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      # Un Service llamado "kafka" haría que Kubernetes inyecte variables KAFKA_*
+      # (por ejemplo KAFKA_PORT) que el broker interpretaría como configuración.
+      enableServiceLinks: false
+      containers:
+        - name: kafka
+          image: apache/kafka:3.9.0
+          ports:
+            - name: client
+              containerPort: 9092
+            - name: controller
+              containerPort: 9093
+          envFrom:
+            - configMapRef:
+                name: kafka-broker-config
+          readinessProbe:
+            tcpSocket:
+              port: 9092
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 24
+          resources:
+            requests:
+              cpu: 200m
+              memory: 384Mi
+            limits:
+              memory: 768Mi
+          volumeMounts:
+            - name: data
+              mountPath: /tmp/kraft-combined-logs
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  namespace: urban-sensors
+  labels:
+    app: kafka
+spec:
+  selector:
+    app: kafka
+  ports:
+    - name: client
+      port: 9092
+      targetPort: 9092

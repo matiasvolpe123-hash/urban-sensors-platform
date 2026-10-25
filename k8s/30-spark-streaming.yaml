@@ -1,0 +1,80 @@
+# Job de Spark Structured Streaming.
+# El código (apps/spark/) llega como ConfigMap "spark-job-code" y se monta en /app.
+# Spark corre en modo local[2] dentro del pod: no hace falta un operador de Spark.
+# Al arrancar descarga el conector de Kafka desde Maven Central (--packages),
+# por eso el primer arranque tarda uno o dos minutos y el pod necesita internet.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-streaming
+  namespace: urban-sensors
+  labels:
+    app: spark-streaming
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: spark-streaming
+  template:
+    metadata:
+      labels:
+        app: spark-streaming
+    spec:
+      enableServiceLinks: false
+      initContainers:
+        # No arranca Spark hasta que el tópico exista.
+        - name: wait-for-topic
+          image: apache/kafka:3.9.0
+          envFrom:
+            - configMapRef:
+                name: kafka-client-config
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              until /opt/kafka/bin/kafka-topics.sh --bootstrap-server "${KAFKA_BOOTSTRAP_SERVERS}" --describe --topic "${KAFKA_TOPIC}" >/dev/null 2>&1; do
+                echo "Esperando al tópico ${KAFKA_TOPIC}..."
+                sleep 3
+              done
+              echo "Tópico ${KAFKA_TOPIC} disponible."
+      containers:
+        - name: spark
+          image: apache/spark:3.5.7-python3
+          command: ["/opt/spark/bin/spark-submit"]
+          args:
+            - --master
+            - local[2]
+            - --driver-memory
+            - 512m
+            - --packages
+            - org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.7
+            - --conf
+            - spark.jars.ivy=/tmp/ivy
+            # Sin interfaz web de Spark: ahorra memoria.
+            - --conf
+            - spark.ui.enabled=false
+            - /app/streaming_job.py
+          envFrom:
+            - configMapRef:
+                name: kafka-client-config
+            - configMapRef:
+                name: spark-config
+          volumeMounts:
+            - name: code
+              mountPath: /app
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 300m
+              memory: 640Mi
+            limits:
+              memory: 1Gi
+      volumes:
+        - name: code
+          configMap:
+            name: spark-job-code
+        - name: tmp
+          emptyDir: {}

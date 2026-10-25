@@ -1,0 +1,49 @@
+# Job que crea el tópico urban_sensors con 3 particiones.
+# Reintenta hasta que el broker esté listo. Es idempotente (--if-not-exists).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-create-topic
+  namespace: urban-sensors
+  labels:
+    app: kafka-create-topic
+spec:
+  backoffLimit: 6
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: kafka-create-topic
+    spec:
+      restartPolicy: OnFailure
+      enableServiceLinks: false
+      containers:
+        - name: create-topic
+          image: apache/kafka:3.9.0
+          envFrom:
+            - configMapRef:
+                name: kafka-client-config
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Esperando al broker en ${KAFKA_BOOTSTRAP_SERVERS}..."
+              until /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server "${KAFKA_BOOTSTRAP_SERVERS}" >/dev/null 2>&1; do
+                sleep 3
+              done
+              echo "Broker disponible. Creando tópico ${KAFKA_TOPIC}..."
+              /opt/kafka/bin/kafka-topics.sh \
+                --bootstrap-server "${KAFKA_BOOTSTRAP_SERVERS}" \
+                --create --if-not-exists \
+                --topic "${KAFKA_TOPIC}" \
+                --partitions "${KAFKA_TOPIC_PARTITIONS}" \
+                --replication-factor "${KAFKA_TOPIC_REPLICATION_FACTOR}"
+              echo "Detalle del tópico:"
+              /opt/kafka/bin/kafka-topics.sh \
+                --bootstrap-server "${KAFKA_BOOTSTRAP_SERVERS}" \
+                --describe --topic "${KAFKA_TOPIC}"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi

@@ -1,0 +1,79 @@
+# ConfigMaps con TODAS las variables de entorno del proyecto.
+# Ningún valor sensible va hardcodeado en el código: el código lee estas variables.
+# (Kafka corre en PLAINTEXT dentro del cluster, así que no hay usuarios ni contraseñas.
+#  Si algún día se agregaran, irían en un Secret, nunca en un ConfigMap.)
+
+# ------------------------------------------------------------------------------
+# 1) Configuración del BROKER de Kafka (modo KRaft, un solo nodo)
+# ------------------------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-broker-config
+  namespace: urban-sensors
+data:
+  KAFKA_NODE_ID: "1"
+  KAFKA_PROCESS_ROLES: "broker,controller"
+  KAFKA_CONTROLLER_QUORUM_VOTERS: "1@localhost:9093"
+  KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+  KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
+  # Dirección con la que los clientes del cluster llegan al broker (el Service "kafka").
+  KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka.urban-sensors.svc.cluster.local:9092"
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+  KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+  KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+  KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+  KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+  # Los tópicos se crean a propósito con el Job (3 particiones), no automáticamente.
+  KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+  # Memoria de la JVM del broker (por defecto Kafka reserva 1 GB). Valor bajo para equipos con poca RAM.
+  KAFKA_HEAP_OPTS: "-Xms256m -Xmx384m"
+---
+# ------------------------------------------------------------------------------
+# 2) Configuración de los CLIENTES de Kafka (productor, Spark y Job del tópico)
+# ------------------------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-client-config
+  namespace: urban-sensors
+data:
+  KAFKA_BOOTSTRAP_SERVERS: "kafka.urban-sensors.svc.cluster.local:9092"
+  KAFKA_TOPIC: "urban_sensors"
+  KAFKA_TOPIC_PARTITIONS: "3"
+  KAFKA_TOPIC_REPLICATION_FACTOR: "1"
+---
+# ------------------------------------------------------------------------------
+# 3) Configuración del job de SPARK
+# ------------------------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spark-config
+  namespace: urban-sensors
+data:
+  SPARK_APP_NAME: "urban-sensors-streaming"
+  # Ventana de tiempo para agregar (1 minuto, como pide la consigna).
+  SPARK_WINDOW_DURATION: "1 minute"
+  # Cuánto tiempo se esperan datos que llegan tarde antes de cerrar una ventana.
+  SPARK_WATERMARK_DELAY: "2 minutes"
+  # Cada cuánto Spark procesa un nuevo micro-lote.
+  SPARK_TRIGGER_INTERVAL: "10 seconds"
+  # "latest": solo datos nuevos. "earliest": todo lo que haya en el tópico.
+  SPARK_STARTING_OFFSETS: "earliest"
+  SPARK_CHECKPOINT_DIR: "/tmp/spark-checkpoints/urban-sensors"
+  SPARK_SHUFFLE_PARTITIONS: "3"
+  SPARK_LOG_LEVEL: "WARN"
+---
+# ------------------------------------------------------------------------------
+# 4) Configuración del PRODUCTOR de sensores
+# ------------------------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: producer-config
+  namespace: urban-sensors
+data:
+  PRODUCER_NUM_SENSORS: "5"
+  PRODUCER_INTERVAL_SECONDS: "1"

@@ -1,0 +1,14 @@
+# Entornos virtuales y caché de Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Secretos y variables locales
+.env
+*.pem
+*.key
+kubeconfig*
+
+# Sistema
+.DS_Store

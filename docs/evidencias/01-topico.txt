@@ -1,0 +1,4 @@
+Topic: urban_sensors	TopicId: DyvGyNcMR4ur9QTNOy8XrQ	PartitionCount: 3	ReplicationFactor: 1	Configs: 
+	Topic: urban_sensors	Partition: 0	Leader: 1	Replicas: 1	Isr: 1	Elr: 	LastKnownElr: 
+	Topic: urban_sensors	Partition: 1	Leader: 1	Replicas: 1	Isr: 1	Elr: 	LastKnownElr: 
+	Topic: urban_sensors	Partition: 2	Leader: 1	Replicas: 1	Isr: 1	Elr: 	LastKnownElr: 
